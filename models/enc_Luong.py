@@ -29,13 +29,13 @@ class LuongSeqToSeq(nn.Module):
         self.dropout = dropout
         if path:
             if USE_CUDA:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th')
-                self.decoder = torch.load(str(path)+'/dec.th')
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th')
+                self.decoder = torch.load(f'{str(path)}/dec.th')
             else:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th',lambda storage, loc: storage)
-                self.decoder = torch.load(str(path)+'/dec.th',lambda storage, loc: storage)
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th', lambda storage, loc: storage)
+                self.decoder = torch.load(f'{str(path)}/dec.th', lambda storage, loc: storage)
         else:
             self.encoder = EncoderRNN(lang.n_words, hidden_size, n_layers,dropout)
             self.decoder = LuongAttnDecoderRNN(hidden_size, lang.n_words, n_layers, dropout)
@@ -44,7 +44,7 @@ class LuongSeqToSeq(nn.Module):
         self.decoder_optimizer = optim.Adam(self.decoder.parameters(), lr=lr * self.decoder_learning_ratio)
 
         self.loss = 0
-        self.loss_vac = 0  
+        self.loss_vac = 0
         self.print_every = 1
         # Move models to GPU
         if USE_CUDA:
@@ -60,13 +60,13 @@ class LuongSeqToSeq(nn.Module):
     def save_model(self,dec_type):
         name_data = "KVR/" if self.task=='' else "BABI/"
         if USEKB:
-            directory = 'save/Luong_KB-'+name_data+str(self.task)+'HDD'+str(self.hidden_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)         
+            directory = f'save/Luong_KB-{name_data}{str(self.task)}HDD{str(self.hidden_size)}DR{str(self.dropout)}L{str(self.n_layers)}lr{str(self.lr)}{str(dec_type)}'
         else:
-            directory = 'save/Luong_noKB-'+name_data+str(self.task)+'HDD'+str(self.hidden_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)         
+            directory = f'save/Luong_noKB-{name_data}{str(self.task)}HDD{str(self.hidden_size)}DR{str(self.dropout)}L{str(self.n_layers)}lr{str(self.lr)}{str(dec_type)}'
         if not os.path.exists(directory):
             os.makedirs(directory)
-        torch.save(self.encoder, directory+'/enc.th')
-        torch.save(self.decoder, directory+'/dec.th')
+        torch.save(self.encoder, f'{directory}/enc.th')
+        torch.save(self.decoder, f'{directory}/dec.th')
         
     def load_model(self,file_name_enc,file_name_dec):
         self.encoder = torch.load(file_name_enc)
@@ -80,14 +80,14 @@ class LuongSeqToSeq(nn.Module):
             self.loss = 0
             self.loss_vac = 0  
             self.print_every = 1
-            
+
         # Zero gradients of both optimizers
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
         loss_Vocab,loss_Ptr,loss_Gate = 0,0,0
         # Run words through encoder
         encoder_outputs, encoder_hidden = self.encoder(input_batches, input_lengths)
-      
+
         # Prepare input and output variables
         decoder_input = Variable(torch.LongTensor([SOS_token] * batch_size))
         decoder_hidden = (encoder_hidden[0][:self.decoder.n_layers],encoder_hidden[1][:self.decoder.n_layers])
@@ -101,24 +101,18 @@ class LuongSeqToSeq(nn.Module):
 
         # Choose whether to use teacher forcing
         use_teacher_forcing = random.random() < teacher_forcing_ratio
-        
-        if use_teacher_forcing:    
-            # Run through decoder one time step at a time
-            for t in range(max_target_length):
-                decoder_vacab, decoder_hidden = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
 
-                all_decoder_outputs_vocab[t] = decoder_vacab
+        for t in range(max_target_length):
+            decoder_vacab, decoder_hidden = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
+
+            all_decoder_outputs_vocab[t] = decoder_vacab
+            if use_teacher_forcing:    
                 decoder_input = target_batches[t] # Next input is current target
-                if USE_CUDA: decoder_input = decoder_input.cuda()
-                
-        else:
-            for t in range(max_target_length):
-                decoder_vacab,decoder_hidden = self.decoder(decoder_input, decoder_hidden, encoder_outputs)
-                all_decoder_outputs_vocab[t] = decoder_vacab
+            else:
                 topv, topi = decoder_vacab.data.topk(1)
                 decoder_input = Variable(topi.view(-1)) # Chosen word is next input
-                if USE_CUDA: decoder_input = decoder_input.cuda()
-                  
+            if USE_CUDA: decoder_input = decoder_input.cuda()
+
         #Loss calculation and backpropagation
         loss_Vocab = masked_cross_entropy(
             all_decoder_outputs_vocab.transpose(0, 1).contiguous(), # -> batch x seq
@@ -128,7 +122,7 @@ class LuongSeqToSeq(nn.Module):
 
         loss = loss_Vocab
         loss.backward()
-        
+
         # Clip gradient norms
         ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
         dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
@@ -187,7 +181,7 @@ class LuongSeqToSeq(nn.Module):
         hyp_s = ""
         pbar = tqdm(enumerate(dev),total=len(dev))
         for j, data_dev in pbar: 
-            words = self.evaluate_batch(len(data_dev[1]),data_dev[0],data_dev[1],data_dev[2])             
+            words = self.evaluate_batch(len(data_dev[1]),data_dev[0],data_dev[1],data_dev[2])
             acc=0
             w = 0
             temp_gen = []
@@ -197,7 +191,7 @@ class LuongSeqToSeq(nn.Module):
                     if e== '<EOS>':
                         break
                     else:
-                        st+= e + ' '
+                        st += f'{e} '
                 temp_gen.append(st)
                 correct = data_dev[7][i]  
 
@@ -212,16 +206,16 @@ class LuongSeqToSeq(nn.Module):
                 hyp.append(str(st.lstrip().rstrip()))
                 ref_s+=str(correct.lstrip().rstrip())+ "\n"
                 hyp_s+=str(st.lstrip().rstrip()) + "\n"
-                
+
             acc_avg += acc/float(len(data_dev[1]))
             wer_avg += w/float(len(data_dev[1]))
             pbar.set_description("R:{:.4f},W:{:.4f}".format(acc_avg/float(len(dev)),
                                                                     wer_avg/float(len(dev))))
 
-        if (BLEU):       
-            bleu_score = moses_multi_bleu(np.array(hyp), np.array(ref), lowercase=True) 
-            logging.info("BLEU SCORE:"+str(bleu_score))     
-                                                                  
+        if BLEU:   
+            bleu_score = moses_multi_bleu(np.array(hyp), np.array(ref), lowercase=True)
+            logging.info(f"BLEU SCORE:{str(bleu_score)}")     
+
             if (bleu_score >= avg_best):
                 self.save_model(str(self.name)+str(bleu_score))
                 logging.info("MODEL SAVED")

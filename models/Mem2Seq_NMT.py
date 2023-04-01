@@ -32,16 +32,16 @@ class Mem2Seq(nn.Module):
         self.lr = lr
         self.n_layers = n_layers
         self.dropout = dropout
-        
+
         if path:
             if USE_CUDA:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th')
-                self.decoder = torch.load(str(path)+'/dec.th')
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th')
+                self.decoder = torch.load(f'{str(path)}/dec.th')
             else:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th',lambda storage, loc: storage)
-                self.decoder = torch.load(str(path)+'/dec.th',lambda storage, loc: storage)
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th', lambda storage, loc: storage)
+                self.decoder = torch.load(f'{str(path)}/dec.th', lambda storage, loc: storage)
         else:
             self.encoder = EncoderMemNN(lang.n_words, hidden_size, n_layers, self.dropout)
             self.decoder = DecoderrMemNN(lang.n_words, hidden_size, n_layers, self.dropout)
@@ -69,11 +69,11 @@ class Mem2Seq(nn.Module):
         return 'L:{:.2f}, VL:{:.2f}, PL:{:.2f}'.format(print_loss_avg,print_loss_vac,print_loss_ptr)
     
     def save_model(self, dec_type):
-        directory = 'save/mem2seq_'+'HDD'+str(self.hidden_size)+'BSZ'+str(self.batch_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)                 
+        directory = 'save/mem2seq_'+'HDD'+str(self.hidden_size)+'BSZ'+str(self.batch_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)
         if not os.path.exists(directory):
             os.makedirs(directory)
-        torch.save(self.encoder, directory+'/enc.th')
-        torch.save(self.decoder, directory+'/dec.th')
+        torch.save(self.encoder, f'{directory}/enc.th')
+        torch.save(self.decoder, f'{directory}/dec.th')
         
     def train_batch(self, input_batches, input_lengths, target_batches, 
                     target_lengths, target_index, batch_size, clip,
@@ -84,7 +84,7 @@ class Mem2Seq(nn.Module):
             self.loss_ptr = 0
             self.loss_vac = 0
             self.print_every = 1
-            
+
         self.batch_size = batch_size
         # Zero gradients of both optimizers
         self.encoder_optimizer.zero_grad()
@@ -99,7 +99,7 @@ class Mem2Seq(nn.Module):
 
         # Prepare input and output variables
         decoder_input = Variable(torch.LongTensor([SOS_token] * batch_size))
-        
+
         max_target_length = max(target_lengths)
         all_decoder_outputs_vocab = Variable(torch.zeros(max_target_length, batch_size, self.output_size))
         all_decoder_outputs_ptr = Variable(torch.zeros(max_target_length, batch_size, input_batches.size(0)))
@@ -112,18 +112,14 @@ class Mem2Seq(nn.Module):
 
         # Choose whether to use teacher forcing
         use_teacher_forcing = random.random() < teacher_forcing_ratio
-        
-        if use_teacher_forcing:    
-            # Run through decoder one time step at a time
-            for t in range(max_target_length):
-                decoder_ptr, decoder_vacab, decoder_hidden  = self.decoder.ptrMemDecoder(decoder_input, decoder_hidden)
+
+        for t in range(max_target_length):
+            decoder_ptr, decoder_vacab, decoder_hidden  = self.decoder.ptrMemDecoder(decoder_input, decoder_hidden)
+            if use_teacher_forcing:    
                 all_decoder_outputs_vocab[t] = decoder_vacab
                 all_decoder_outputs_ptr[t] = decoder_ptr
                 decoder_input = target_batches[t]# Chosen word is next input
-                if USE_CUDA: decoder_input = decoder_input.cuda()            
-        else:
-            for t in range(max_target_length):
-                decoder_ptr, decoder_vacab, decoder_hidden = self.decoder.ptrMemDecoder(decoder_input, decoder_hidden)
+            else:
                 _, toppi = decoder_ptr.data.topk(1)
                 _, topvi = decoder_vacab.data.topk(1)
                 all_decoder_outputs_vocab[t] = decoder_vacab
@@ -132,8 +128,7 @@ class Mem2Seq(nn.Module):
                 top_ptr_i = torch.gather(input_batches[:,:,0], 0, Variable(toppi.view(1, -1))).transpose(0,1)
                 next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i]-1) else topvi[i].item() for i in range(batch_size)]
                 decoder_input = Variable(torch.LongTensor(next_in)) # Chosen word is next input
-                if USE_CUDA: decoder_input = decoder_input.cuda()
-                  
+            if USE_CUDA: decoder_input = decoder_input.cuda()
         #Loss calculation and backpropagation
         loss_Vocab = masked_cross_entropy(
             all_decoder_outputs_vocab.transpose(0, 1).contiguous(), # -> batch x seq
@@ -148,7 +143,7 @@ class Mem2Seq(nn.Module):
 
         loss = loss_Vocab + loss_Ptr
         loss.backward()
-        
+
         # Clip gradient norms
         ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
         dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
@@ -228,13 +223,14 @@ class Mem2Seq(nn.Module):
                                         target_index=data_dev[4],
                                         src_plain=data_dev[5])
             acc=0
-            w = 0 
+            w = 0
             temp_gen = []
             for i, row in enumerate(np.transpose(words)):
                 st = ''
                 for e in row:
                     if e== '<EOS>': break
-                    else: st+= e + ' '
+                    else:else
+                        st += f'{e} '
                 temp_gen.append(st)
                 correct = " ".join(data_dev[6][i])
                 ### IMPORTANT 
@@ -243,19 +239,19 @@ class Mem2Seq(nn.Module):
                 if (correct.lstrip().rstrip() == st.lstrip().rstrip()):
                     acc+=1
                 w += wer(correct.lstrip().rstrip(),st.lstrip().rstrip())
-                ref.append(str(correct.lstrip().rstrip()))
+                ref.append(correct.lstrip().rstrip())
                 hyp.append(str(st.lstrip().rstrip()))
 
             acc_avg += acc/float(len(data_dev[1]))
-            wer_avg += w/float(len(data_dev[1]))            
+            wer_avg += w/float(len(data_dev[1]))
             pbar.set_description("R:{:.4f},W:{:.4f}".format(acc_avg/float(len(dev)),wer_avg/float(len(dev))))
 
-        bleu_score = moses_multi_bleu(np.array(hyp), np.array(ref), lowercase=True) 
-        logging.info("BLEU SCORE:"+str(bleu_score))     
-                                                             
+        bleu_score = moses_multi_bleu(np.array(hyp), np.array(ref), lowercase=True)
+        logging.info(f"BLEU SCORE:{str(bleu_score)}")     
+
         if (bleu_score >= avg_best):
             self.save_model(str(self.name)+str(bleu_score))
-            logging.info("MODEL SAVED")  
+            logging.info("MODEL SAVED")
         return bleu_score
 
 
@@ -270,7 +266,7 @@ class EncoderMemNN(nn.Module):
         for hop in range(self.max_hops+1):
             C = nn.Embedding(self.num_vocab, embedding_dim, padding_idx=PAD_token)
             C.weight.data.normal_(0, 0.1)
-            self.add_module("C_{}".format(hop), C)
+            self.add_module(f"C_{hop}", C)
         self.C = AttrProxy(self, "C_")
         self.softmax = nn.Softmax(dim=1)
         
@@ -305,7 +301,7 @@ class DecoderrMemNN(nn.Module):
         for hop in range(self.max_hops+1):
             C = nn.Embedding(self.num_vocab, embedding_dim, padding_idx=PAD_token)
             C.weight.data.normal_(0, 0.1)
-            self.add_module("C_{}".format(hop), C)
+            self.add_module(f"C_{hop}", C)
         self.C = AttrProxy(self, "C_")
         self.softmax = nn.Softmax(dim=1)
         self.W = nn.Linear(embedding_dim,1)

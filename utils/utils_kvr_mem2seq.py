@@ -93,7 +93,7 @@ class Dataset(data.Dataset):
             story = []
             for i, word_triple in enumerate(sequence):
                 story.append([])
-                for ii, word in enumerate(word_triple):
+                for word in word_triple:
                     temp = word2id[word] if word in word2id else UNK_token
                     story[i].append(temp)
         try:
@@ -112,8 +112,7 @@ class Dataset(data.Dataset):
     def preprocess_gate(self, sequence):
         """Converts words to ids."""
         sequence = sequence + [0]
-        sequence = torch.Tensor(sequence)
-        return sequence
+        return torch.Tensor(sequence)
 
 def collate_fn(data):
     def merge(sequences,max_len):
@@ -157,7 +156,7 @@ def collate_fn(data):
 
 
 def read_langs(file_name, max_line = None):
-    logging.info(("Reading lines from {}".format(file_name)))
+    logging.info(f"Reading lines from {file_name}")
     data=[]
     contex_arr = []
     conversation_arr = []
@@ -176,8 +175,7 @@ def read_langs(file_name, max_line = None):
         KB_counter = 0
         dialog_counter = 0
         for line in fin:
-            line=line.strip()
-            if line:
+            if line := line.strip():
                 if '#' in line:
                     line = line.replace("#","")
                     task_type = line
@@ -188,10 +186,10 @@ def read_langs(file_name, max_line = None):
                     user_counter += 1
                     system_counter += 1
 
-                    gen_u = generate_memory(u, "$u", str(nid)) 
+                    gen_u = generate_memory(u, "$u", str(nid))
                     contex_arr += gen_u
                     conversation_arr += gen_u
-                    
+
                     r_index = []
                     gate = []
                     for key in r.split(' '):
@@ -210,29 +208,29 @@ def read_langs(file_name, max_line = None):
                     if len(r_index) > max_r_len: 
                         max_r_len = len(r_index)
                     contex_arr_temp = contex_arr + [['$$$$']*MEM_TOKEN_SIZE]
-                    
+
                     ent_index_calendar = []
                     ent_index_navigation = []
                     ent_index_weather = []
 
                     gold = ast.literal_eval(gold)
-                    if task_type=="weather":
-                        ent_index_weather = gold
-                    elif task_type=="schedule":
-                        ent_index_calendar = gold
-                    elif task_type=="navigate":
+                    if task_type == "navigate":
                         ent_index_navigation = gold
 
+                    elif task_type == "schedule":
+                        ent_index_calendar = gold
+                    elif task_type == "weather":
+                        ent_index_weather = gold
                     ent_index = list(set(ent_index_calendar + ent_index_navigation + ent_index_weather))
                     data.append([contex_arr_temp,r,r_index,gate,ent_index,list(set(ent_index_calendar)),list(set(ent_index_navigation)),list(set(ent_index_weather)), list(conversation_arr), list(kb_arr)])
-                    
-                    gen_r = generate_memory(r, "$s", str(nid)) 
+
+                    gen_r = generate_memory(r, "$s", str(nid))
                     contex_arr += gen_r
                     conversation_arr += gen_r
                 else:
                     KB_counter += 1
                     r=line
-                    for e in line.split(' '):
+                    for e in r.split(' '):
                         entity[e] = 0
                     kb_info = generate_memory(r, "", str(nid))
                     contex_arr += kb_info
@@ -247,24 +245,24 @@ def read_langs(file_name, max_line = None):
                 kb_arr = []
                 dialog_counter += 1
 
-    max_len = max([len(d[0]) for d in data])
-    logging.info("Pointer percentace= {} ".format(cnt_ptr/(cnt_ptr+cnt_voc)))
-    logging.info("Max responce Len: {}".format(max_r_len))
-    logging.info("Max Input Len: {}".format(max_len))
-    logging.info("Avg. User Utterances: {}".format(user_counter*1.0/dialog_counter))
-    logging.info("Avg. Bot Utterances: {}".format(system_counter*1.0/dialog_counter))
-    logging.info("Avg. KB results: {}".format(KB_counter*1.0/dialog_counter))
-    logging.info("Avg. responce Len: {}".format(system_res_counter*1.0/system_counter))
-    
+    max_len = max(len(d[0]) for d in data)
+    logging.info(f"Pointer percentace= {cnt_ptr / (cnt_ptr + cnt_voc)} ")
+    logging.info(f"Max responce Len: {max_r_len}")
+    logging.info(f"Max Input Len: {max_len}")
+    logging.info(f"Avg. User Utterances: {user_counter * 1.0 / dialog_counter}")
+    logging.info(f"Avg. Bot Utterances: {system_counter * 1.0 / dialog_counter}")
+    logging.info(f"Avg. KB results: {KB_counter * 1.0 / dialog_counter}")
+    logging.info(f"Avg. responce Len: {system_res_counter * 1.0 / system_counter}")
+
     print('Sample: ',data[1][0],data[1][1],data[1][2],data[1][3],data[1][4])
     return data, max_len, max_r_len
 
 def generate_memory(sent, speaker, time):
     sent_new = []
     sent_token = sent.split(' ')
-    if speaker=="$u" or speaker=="$s":
+    if speaker in ["$u", "$s"]:
         for word in sent_token:
-            temp = [word, speaker, 't'+str(time)] + ["PAD"]*(MEM_TOKEN_SIZE-3)
+            temp = [word, speaker, f't{str(time)}'] + ["PAD"]*(MEM_TOKEN_SIZE-3)
             sent_new.append(temp)
     else:
         sent_token = sent_token[::-1] + ["PAD"]*(MEM_TOKEN_SIZE-len(sent_token))
@@ -297,39 +295,40 @@ def get_seq(pairs,lang,batch_size,type,max_len):
         if(type):
             lang.index_words(pair[0])
             lang.index_words(pair[1], trg=True)
-    
+
     dataset = Dataset(x_seq, y_seq,ptr_seq,gate_seq,lang.word2index, lang.word2index,max_len,entity,entity_cal,entity_nav,entity_wet, conv_seq, kb_arr)
-    data_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                              batch_size=batch_size,
-                                              shuffle=type,
-                                              collate_fn=collate_fn)
-    return data_loader
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=type,
+        collate_fn=collate_fn,
+    )
 
 def prepare_data_seq(task,batch_size=100,shuffle=True):
-    file_train = 'data/KVR/{}train.txt'.format(task)
-    file_dev = 'data/KVR/{}dev.txt'.format(task)
-    file_test = 'data/KVR/{}test.txt'.format(task)
+    file_train = f'data/KVR/{task}train.txt'
+    file_dev = f'data/KVR/{task}dev.txt'
+    file_test = f'data/KVR/{task}test.txt'
 
     pair_train,max_len_train, max_r_train = read_langs(file_train, max_line=None)
     pair_dev,max_len_dev, max_r_dev = read_langs(file_dev, max_line=None)
     pair_test,max_len_test, max_r_test = read_langs(file_test, max_line=None)
     max_r_test_OOV = 0
     max_len_test_OOV = 0
-    
+
     max_len = max(max_len_train,max_len_dev,max_len_test,max_len_test_OOV) +1
     max_r  = max(max_r_train,max_r_dev,max_r_test,max_r_test_OOV) +1
     lang = Lang()
-    
+
     train = get_seq(pair_train,lang,batch_size,True,max_len)
     dev   = get_seq(pair_dev,lang,batch_size,False,max_len)
     test  = get_seq(pair_test,lang,batch_size,False,max_len)
-    
-    logging.info("Read %s sentence pairs train" % len(pair_train))
-    logging.info("Read %s sentence pairs dev" % len(pair_dev))
-    logging.info("Read %s sentence pairs test" % len(pair_test))  
-    logging.info("Max len Input %s " % max_len)
-    logging.info("Vocab_size %s " % lang.n_words)
-    logging.info("USE_CUDA={}".format(USE_CUDA))
+
+    logging.info(f"Read {len(pair_train)} sentence pairs train")
+    logging.info(f"Read {len(pair_dev)} sentence pairs dev")
+    logging.info(f"Read {len(pair_test)} sentence pairs test")
+    logging.info(f"Max len Input {max_len} ")
+    logging.info(f"Vocab_size {lang.n_words} ")
+    logging.info(f"USE_CUDA={USE_CUDA}")
     #print(lang.index2word)
 
     return train, dev, test, [], lang, max_len, max_r

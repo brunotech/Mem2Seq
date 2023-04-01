@@ -1,7 +1,7 @@
 from utils.config import *
 from models.Mem2Seq_NMT import Mem2Seq
 import numpy as np
-import logging 
+import logging
 from tqdm import tqdm
 from utils.utils_NMT import prepare_data_seq
 
@@ -13,7 +13,7 @@ model = Mem2Seq(hidden_size= 100, max_len= max_len,
 
 avg_best = 0
 for epoch in range(300):
-    logging.info("Epoch:{}".format(epoch))  
+    logging.info(f"Epoch:{epoch}")
     # Run the train function
     pbar = tqdm(enumerate(train),total=len(train))
     for i, data in pbar: 

@@ -1,5 +1,5 @@
 import os
-import logging 
+import logging
 import argparse
 from tqdm import tqdm
 
@@ -8,10 +8,7 @@ PAD_token = 1
 EOS_token = 2
 SOS_token = 3
 
-if (os.cpu_count() > 8):
-    USE_CUDA = True
-else:
-    USE_CUDA = False
+USE_CUDA = os.cpu_count() > 8
 MAX_LENGTH = 10
 
 parser = argparse.ArgumentParser(description='Seq_TO_Seq Dialogue bAbI')
@@ -39,7 +36,7 @@ print(args)
 name = str(args['task'])+str(args['decoder'])+str(args['hidden'])+str(args['batch'])+str(args['learn'])+str(args['drop'])+str(args['layer'])+str(args['limit'])
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m-%d %H:%M')#,filename='save/logs/{}.log'.format(str(name)))
 
-LIMIT = int(args["limit"]) 
+LIMIT = int(args["limit"])
 USEKB = int(args["useKB"])
 ENTPTR = int(args["entPtr"])
 ADDNAME = args["addName"]

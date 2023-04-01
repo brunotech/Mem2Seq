@@ -110,7 +110,7 @@ def collate_fn(data):
 
     
 def read_langs(file_name, max_line = None):
-    logging.info(("Reading lines from {}".format(file_name)))
+    logging.info(f"Reading lines from {file_name}")
     data=[]
 
     with open(file_name) as fin:
@@ -118,10 +118,9 @@ def read_langs(file_name, max_line = None):
         cnt_voc = 0
         max_r_len = 0
         for line in fin:
-            line=line.strip()
-            if line:
+            if line := line.strip():
                 eng, fre = line.split('\t')
-                eng, fre = word_tokenize(eng.lower()), word_tokenize(fre.lower())     
+                eng, fre = word_tokenize(eng.lower()), word_tokenize(fre.lower())
                 ptr_index = []
                 for key in fre:
                     index = [loc for loc, val in enumerate(eng) if (val[0] == key)]
@@ -135,16 +134,18 @@ def read_langs(file_name, max_line = None):
 
                 if len(ptr_index) > max_r_len: 
                     max_r_len = len(ptr_index)
-                eng = eng + ['$$$$']       
+                eng = eng + ['$$$$']
                 # print(eng,fre,ptr_index)
                 data.append([eng,fre,ptr_index])
 
 
-    max_len = max([len(d[0]) for d in data])
-    logging.info("Pointer percentace= {} ".format(cnt_ptr/(cnt_ptr+cnt_voc)))
-    logging.info("Max responce Len: {}".format(max_r_len))
-    logging.info("Max Input Len: {}".format(max_len))
-    logging.info('Sample: Eng = {}, Fre = {}, Ptr = {}'.format(" ".join(data[0][0])," ".join(data[0][1]),data[0][2]))
+    max_len = max(len(d[0]) for d in data)
+    logging.info(f"Pointer percentace= {cnt_ptr / (cnt_ptr + cnt_voc)} ")
+    logging.info(f"Max responce Len: {max_r_len}")
+    logging.info(f"Max Input Len: {max_len}")
+    logging.info(
+        f'Sample: Eng = {" ".join(data[0][0])}, Fre = {" ".join(data[0][1])}, Ptr = {data[0][2]}'
+    )
     return data, max_len, max_r_len
 
 
@@ -159,13 +160,14 @@ def get_seq(pairs,lang,batch_size,type,max_len):
         if(type):
             lang.index_words(pair[0])
             lang.index_words(pair[1])
-    
+
     dataset = Dataset(x_seq, y_seq,ptr_seq,lang.word2index, lang.word2index,max_len)
-    data_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                              batch_size=batch_size,
-                                              shuffle=type,
-                                              collate_fn=collate_fn)
-    return data_loader
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=type,
+        collate_fn=collate_fn,
+    )
 
 def prepare_data_seq(batch_size=100,shuffle=True):
     file_train = 'data/eng-fra.txt'
@@ -173,14 +175,14 @@ def prepare_data_seq(batch_size=100,shuffle=True):
     pair_train,max_len, max_r = read_langs(file_train,max_line=None)
 
     lang = Lang()
-    
+
     train = get_seq(pair_train,lang,batch_size,True,max_len)
-    
-    logging.info("Read %s sentence pairs train" % len(pair_train))
- 
-    logging.info("Max len Input %s " % max_len)
-    logging.info("Vocab_size %s " % lang.n_words)
-    logging.info("USE_CUDA={}".format(USE_CUDA))
+
+    logging.info(f"Read {len(pair_train)} sentence pairs train")
+
+    logging.info(f"Max len Input {max_len} ")
+    logging.info(f"Vocab_size {lang.n_words} ")
+    logging.info(f"USE_CUDA={USE_CUDA}")
 
     return train,lang, max_len, max_r
 
