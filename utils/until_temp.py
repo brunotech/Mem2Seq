@@ -82,8 +82,7 @@ class Dataset(data.Dataset):
     def preprocess_gate(self, sequence):
         """Converts words to ids."""
         sequence = sequence + [0]
-        sequence = torch.Tensor(sequence)
-        return sequence
+        return torch.Tensor(sequence)
 
 def collate_fn(data):
     def merge(sequences,max_len):
@@ -133,7 +132,7 @@ def normalize_string(s):
     return s
 
 def read_langs(file_name, entity, can, ind2cand ,max_line = None):
-    logging.info(("Reading lines from {}".format(file_name)))
+    logging.info(f"Reading lines from {file_name}")
     # Read the file and split into lines
     data=[]
     context=""
@@ -145,12 +144,11 @@ def read_langs(file_name, entity, can, ind2cand ,max_line = None):
         max_r_len = 0
         cnt_lin = 1
         for line in fin:
-            line=line.strip()
-            if line:
+            if line := line.strip():
                 nid, line = line.split(' ', 1)
                 if '\t' in line:
                     u, r = line.split('\t')
-                    context += str(u)+" " 
+                    context += f"{str(u)} "
                     contex_arr = context.split(' ')[LIMIT:]
                     r_index = []
                     gate = []
@@ -167,30 +165,29 @@ def read_langs(file_name, entity, can, ind2cand ,max_line = None):
                                 cnt_voc +=1             
                             r_index.append(index)
 
-                    if (len(r_index)==0):
+                    if not r_index:
                         r_index = [len(contex_arr) ,len(contex_arr) ,len(contex_arr) ,len(contex_arr) ]
                     if (len(r_index)==1):
                         r_index.append(len(contex_arr)) 
                         r_index.append(len(contex_arr)) 
                         r_index.append(len(contex_arr)) 
-                    
+
                     if len(r_index) > max_r_len: 
                         max_r_len = len(r_index)
-                    
+
                     data.append([" ".join(contex_arr)+" $$$$",can[r],r_index,r])
-                    context+=str(r)+" " 
                 else:
                     r=line
-                    context+=str(r)+" "                    
+                context += f"{str(r)} "
             else:
                 cnt_lin+=1
                 if(max_line and cnt_lin>=max_line):
                     break
                 context=""
-    max_len = max([len(d[0].split(' ')) for d in data])
-    logging.info("Pointer percentace= {} ".format(cnt_ptr/(cnt_ptr+cnt_voc)))
-    logging.info("Max responce Len: {}".format(max_r_len))
-    logging.info("Max Input Len: {}".format(max_len))
+    max_len = max(len(d[0].split(' ')) for d in data)
+    logging.info(f"Pointer percentace= {cnt_ptr / (cnt_ptr + cnt_voc)} ")
+    logging.info(f"Max responce Len: {max_r_len}")
+    logging.info(f"Max Input Len: {max_len}")
     return data, max_len, max_r_len
 
 
@@ -206,13 +203,14 @@ def get_seq(pairs,lang,batch_size,type,max_len):
         gate_seq.append(pair[3])
         if(type):
             lang.index_words(pair[0])
-    
+
     dataset = Dataset(x_seq, y_seq,ptr_seq,gate_seq,lang.word2index, lang.word2index,max_len)
-    data_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                              batch_size=batch_size,
-                                              shuffle=type,
-                                              collate_fn=collate_fn)
-    return data_loader
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=type,
+        collate_fn=collate_fn,
+    )
 
 def get_type_dict(kb_path, dstc2=False): 
     """
@@ -249,8 +247,7 @@ def entityList(kb_path, task_id):
     type_dict = get_type_dict(kb_path, dstc2=(task_id==6))
     entity_list = []
     for key in type_dict.keys():
-        for value in type_dict[key]:
-            entity_list.append(value)
+        entity_list.extend(iter(type_dict[key]))
     return entity_list
 
 
@@ -274,10 +271,10 @@ def load_candidates(task_id, candidates_f):
 def candid2DL(candid_path, kb_path, task_id):
     type_dict = get_type_dict(kb_path, dstc2=(task_id==6))
     candidates, _, _ = load_candidates(task_id=task_id, candidates_f=candid_path)
-    candid_all = []  
+    candid_all = []
     candid2candDL = {}
     for index, cand in enumerate(candidates):
-        cand_DL = [ x for x in cand]
+        cand_DL = list(cand)
         for index, word in enumerate(cand_DL):
             for type_name in type_dict:
                 if word in type_dict[type_name] and type_name != 'R_rating':
@@ -287,21 +284,21 @@ def candid2DL(candid_path, kb_path, task_id):
         candid_all.append(cand_DL)
         candid2candDL[' '.join(cand)] = cand_DL
     cand_list = list(set(candid_all))
-    candid2idx = dict((c, i) for i, c in enumerate(cand_list))
-    idx2candid = dict((i, c) for c, i in candid2idx.items()) 
+    candid2idx = {c: i for i, c in enumerate(cand_list)}
+    idx2candid = {i: c for c, i in candid2idx.items()} 
 
-    for key in candid2candDL.keys():
-            candid2candDL[key] = candid2idx[candid2candDL[key]]
-        
+    for key in candid2candDL:
+        candid2candDL[key] = candid2idx[candid2candDL[key]]
+
     return candid2candDL, idx2candid
 
 
 def prepare_data_seq(task,batch_size=100,shuffle=True):
-    file_train = 'data/dialog-bAbI-tasks/dialog-babi-task{}trn.txt'.format(task)
-    file_dev = 'data/dialog-bAbI-tasks/dialog-babi-task{}dev.txt'.format(task)
-    file_test = 'data/dialog-bAbI-tasks/dialog-babi-task{}tst.txt'.format(task)
+    file_train = f'data/dialog-bAbI-tasks/dialog-babi-task{task}trn.txt'
+    file_dev = f'data/dialog-bAbI-tasks/dialog-babi-task{task}dev.txt'
+    file_test = f'data/dialog-bAbI-tasks/dialog-babi-task{task}tst.txt'
     if (int(task) != 6):
-        file_test_OOV = 'data/dialog-bAbI-tasks/dialog-babi-task{}tst-OOV.txt'.format(task)
+        file_test_OOV = f'data/dialog-bAbI-tasks/dialog-babi-task{task}tst-OOV.txt'
 
     ent = entityList('data/dialog-bAbI-tasks/dialog-babi-kb-all.txt',int(task))
     can, ind2cand = candid2DL('data/dialog-bAbI-tasks/dialog-babi-candidates.txt', 'data/dialog-bAbI-tasks/dialog-babi-kb-all.txt', int(task))
@@ -313,12 +310,12 @@ def prepare_data_seq(task,batch_size=100,shuffle=True):
     max_len_test_OOV = 0
     if (int(task) != 6):
         pair_test_OOV,max_len_test_OOV, max_r_test_OOV = read_langs(file_test_OOV,ent,can, ind2cand , max_line=None)
-    
+
 
     max_len = max(max_len_train,max_len_dev,max_len_test,max_len_test_OOV) +1
     max_r  = max(max_r_train,max_r_dev,max_r_test,max_r_test_OOV) +1
     lang = Lang()
-    
+
     train = get_seq(pair_train,lang,batch_size,True,max_len)
     dev   = get_seq(pair_dev,lang,batch_size,False,max_len)
     test  = get_seq(pair_test,lang,batch_size,False,max_len)
@@ -327,15 +324,15 @@ def prepare_data_seq(task,batch_size=100,shuffle=True):
     else:
         testOOV = []
 
-    print(pair_dev[0:20])
-    
-    logging.info("Read %s sentence pairs train" % len(pair_train))
-    logging.info("Read %s sentence pairs dev" % len(pair_dev))
-    logging.info("Read %s sentence pairs test" % len(pair_test))
+    print(pair_dev[:20])
+
+    logging.info(f"Read {len(pair_train)} sentence pairs train")
+    logging.info(f"Read {len(pair_dev)} sentence pairs dev")
+    logging.info(f"Read {len(pair_test)} sentence pairs test")
     if (int(task) != 6):
-        logging.info("Read %s sentence pairs test" % len(pair_test_OOV))    
-    logging.info("Max len Input %s " % max_len)
-    logging.info("Vocab_size %s " % lang.n_words)
-    logging.info("USE_CUDA={}".format(USE_CUDA))
-    
+        logging.info(f"Read {len(pair_test_OOV)} sentence pairs test")
+    logging.info(f"Max len Input {max_len} ")
+    logging.info(f"Vocab_size {lang.n_words} ")
+    logging.info(f"USE_CUDA={USE_CUDA}")
+
     return train, dev, test, testOOV, lang, max_len, max_r, len(ind2cand),ind2cand

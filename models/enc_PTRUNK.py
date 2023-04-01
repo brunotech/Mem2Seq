@@ -30,14 +30,14 @@ class PTRUNK(nn.Module):
         self.dropout = dropout
         if path:
             if USE_CUDA:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th')
-                self.decoder = torch.load(str(path)+'/dec.th')
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th')
+                self.decoder = torch.load(f'{str(path)}/dec.th')
             else:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th',lambda storage, loc: storage)
-                self.decoder = torch.load(str(path)+'/dec.th',lambda storage, loc: storage)
-                self.decoder.viz_arr =[] 
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th', lambda storage, loc: storage)
+                self.decoder = torch.load(f'{str(path)}/dec.th', lambda storage, loc: storage)
+                self.decoder.viz_arr =[]
         else:
             self.encoder = EncoderRNN(lang.n_words, hidden_size, n_layers,dropout)
             self.decoder = PtrDecoderRNN(hidden_size, lang.n_words, n_layers, dropout)
@@ -66,14 +66,14 @@ class PTRUNK(nn.Module):
     def save_model(self,dec_type):
         name_data = "KVR/" if self.task=='' else "BABI/"
         if USEKB:
-            directory = 'save/PTR_KB-'+name_data+str(self.task)+'HDD'+str(self.hidden_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)         
+            directory = f'save/PTR_KB-{name_data}{str(self.task)}HDD{str(self.hidden_size)}DR{str(self.dropout)}L{str(self.n_layers)}lr{str(self.lr)}{str(dec_type)}'
         else:
-            directory = 'save/PTR_noKB-'+name_data+str(self.task)+'HDD'+str(self.hidden_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)         
+            directory = f'save/PTR_noKB-{name_data}{str(self.task)}HDD{str(self.hidden_size)}DR{str(self.dropout)}L{str(self.n_layers)}lr{str(self.lr)}{str(dec_type)}'
         #directory = 'save/PTR_KVR_KB/'+str(self.task)+'HDD'+str(self.hidden_size)+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type) #+datetime.datetime.now().strftime("%I%M%p%B%d%Y"
         if not os.path.exists(directory):
             os.makedirs(directory)
-        torch.save(self.encoder, directory+'/enc.th')
-        torch.save(self.decoder, directory+'/dec.th')
+        torch.save(self.encoder, f'{directory}/enc.th')
+        torch.save(self.decoder, f'{directory}/dec.th')
         
     def train_batch(self, input_batches, input_lengths, target_batches, 
                     target_lengths, target_index, target_gate, batch_size, clip,
@@ -83,18 +83,18 @@ class PTRUNK(nn.Module):
             self.loss_gate = 0
             self.loss_ptr = 0
             self.loss_vac = 0
-            self.print_every = 1 
+            self.print_every = 1
         # Zero gradients of both optimizers
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
         loss_Vocab,loss_Ptr,loss_Gate = 0,0,0
         # Run words through encoder
         encoder_outputs, encoder_hidden = self.encoder(input_batches, input_lengths)
-      
+
         # Prepare input and output variables
         decoder_input = Variable(torch.LongTensor([SOS_token] * batch_size))
         decoder_hidden = (encoder_hidden[0][:self.decoder.n_layers],encoder_hidden[1][:self.decoder.n_layers])
-        
+
         max_target_length = max(target_lengths)
         all_decoder_outputs_vocab = Variable(torch.zeros(max_target_length, batch_size, self.output_size))
         all_decoder_outputs_ptr = Variable(torch.zeros(max_target_length, batch_size, encoder_outputs.size(0)))
@@ -108,34 +108,25 @@ class PTRUNK(nn.Module):
 
         # Choose whether to use teacher forcing
         use_teacher_forcing = random.random() < teacher_forcing_ratio
-        
-        if use_teacher_forcing:    
-            # Run through decoder one time step at a time
-            for t in range(max_target_length):
-                decoder_ptr,decoder_vacab,gate,decoder_hidden = self.decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
 
-                all_decoder_outputs_vocab[t] = decoder_vacab
-                all_decoder_outputs_ptr[t] = decoder_ptr
-                all_decoder_outputs_gate[t] = gate
+        for t in range(max_target_length):
+            decoder_ptr,decoder_vacab,gate,decoder_hidden = self.decoder(
+                decoder_input, decoder_hidden, encoder_outputs)
+
+            all_decoder_outputs_vocab[t] = decoder_vacab
+            all_decoder_outputs_ptr[t] = decoder_ptr
+            all_decoder_outputs_gate[t] = gate
+            if use_teacher_forcing:    
                 decoder_input = target_batches[t] # Next input is current target
-                if USE_CUDA: decoder_input = decoder_input.cuda()
-                
-        else:
-            for t in range(max_target_length):
-                decoder_ptr,decoder_vacab,gate,decoder_hidden = self.decoder(
-                    decoder_input, decoder_hidden, encoder_outputs)
-                all_decoder_outputs_vocab[t] = decoder_vacab
-                all_decoder_outputs_ptr[t] = decoder_ptr
-                all_decoder_outputs_gate[t] = gate
+            else:
                 topv, topvi = decoder_vacab.data.topk(1)
                 topp, toppi = decoder_ptr.data.topk(1)
                 ## get the correspective word in input
                 top_ptr_i = torch.gather(input_batches,0,toppi.view(1, -1))
                 next_in = [top_ptr_i.squeeze()[i].data[0] if(gate.squeeze()[i].data[0]>=0.5) else topvi.squeeze()[i] for i in range(batch_size)]
                 decoder_input = Variable(torch.LongTensor(next_in)) # Chosen word is next input
-                if USE_CUDA: decoder_input = decoder_input.cuda()
-                  
+            if USE_CUDA: decoder_input = decoder_input.cuda()
+
         #Loss calculation and backpropagation
         loss_Vocab = masked_cross_entropy(
             all_decoder_outputs_vocab.transpose(0, 1).contiguous(), # -> batch x seq
@@ -152,7 +143,7 @@ class PTRUNK(nn.Module):
 
         loss = loss_Vocab + loss_Ptr + loss_gate
         loss.backward()
-        
+
         # Clip gradient norms
         ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
         dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
@@ -160,7 +151,7 @@ class PTRUNK(nn.Module):
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
         self.loss += loss.data[0]
-        self.loss_gate += loss_gate.data[0] 
+        self.loss_gate += loss_gate.data[0]
         self.loss_ptr += loss_Ptr.data[0]
         self.loss_vac += loss_Vocab.data[0]
         
@@ -168,7 +159,7 @@ class PTRUNK(nn.Module):
     def evaluate_batch(self,batch_size,input_batches, input_lengths, target_batches, target_lengths, target_index,target_gate,src_plain):  
         # Set to not-training mode to disable dropout
         self.encoder.train(False)
-        self.decoder.train(False)  
+        self.decoder.train(False)
         # Run words through encoder
         encoder_outputs, encoder_hidden = self.encoder(input_batches, input_lengths, None)
         # Prepare input and output variables
@@ -186,9 +177,7 @@ class PTRUNK(nn.Module):
             all_decoder_outputs_ptr = all_decoder_outputs_ptr.cuda()
             all_decoder_outputs_gate = all_decoder_outputs_gate.cuda()
             decoder_input = decoder_input.cuda()
-        p = []
-        for elm in src_plain:
-            p.append(elm.split(' '))
+        p = [elm.split(' ') for elm in src_plain]
         # Run through decoder one time step at a time
         for t in range(self.max_r):
             decoder_ptr,decoder_vacab,gate,decoder_hidden  = self.decoder(
@@ -240,7 +229,7 @@ class PTRUNK(nn.Module):
         hyp_s = ""
         pbar = tqdm(enumerate(dev),total=len(dev))
         for j, data_dev in pbar: 
-            words = self.evaluate_batch(len(data_dev[1]),data_dev[0],data_dev[1],data_dev[2],data_dev[3],data_dev[4],data_dev[5],data_dev[6])            
+            words = self.evaluate_batch(len(data_dev[1]),data_dev[0],data_dev[1],data_dev[2],data_dev[3],data_dev[4],data_dev[5],data_dev[6])
             acc=0
             w = 0
             temp_gen = []
@@ -250,10 +239,10 @@ class PTRUNK(nn.Module):
                     if e== '<EOS>':
                         break
                     else:
-                        st+= e + ' '
+                        st += f'{e} '
                 temp_gen.append(st)
                 correct = data_dev[7][i]
-                
+
                 if (correct.lstrip().rstrip() == st.lstrip().rstrip()):
                     acc+=1
                 w += wer(correct.lstrip().rstrip(),st.lstrip().rstrip())
@@ -266,10 +255,10 @@ class PTRUNK(nn.Module):
             wer_avg += w/float(len(data_dev[1]))
             pbar.set_description("R:{:.4f},W:{:.4f}".format(acc_avg/float(len(dev)),wer_avg/float(len(dev))))
 
-        if (BLEU):       
-            bleu_score = moses_multi_bleu(np.array(hyp), np.array(ref), lowercase=True) 
-            logging.info("BLEU SCORE:"+str(bleu_score))     
-                                                                      
+        if BLEU:   
+            bleu_score = moses_multi_bleu(np.array(hyp), np.array(ref), lowercase=True)
+            logging.info(f"BLEU SCORE:{str(bleu_score)}")     
+
             if (bleu_score >= avg_best):
                 self.save_model(str(self.name)+str(bleu_score))
                 logging.info("MODEL SAVED")

@@ -24,8 +24,8 @@ def entity_replace(temp, bot, user, names={}):
         "stations": "station",
         "hospitals": "hospital"
     }
-    
-    for grp in global_rp.keys():
+
+    for grp in global_rp:
         bot = bot.replace(grp, global_rp[grp])
         user = user.replace(grp, global_rp[grp])
 
@@ -42,15 +42,15 @@ def entity_replace(temp, bot, user, names={}):
                 bot = bot.replace(wo, e[wo])
             inde = user.find(wo)
             if(inde!=-1):
-                user = user.replace(wo, e[wo]) 
+                user = user.replace(wo, e[wo])
     return bot, user
 
 def cleaner(token_array):
     new_token_array = []
     for idx, token in enumerate(token_array):
         temp = token
-        if token==".." or token=="." or token=="...": continue
-        if (token=="am" or token=="pm") and token_array[idx-1].isdigit():
+        if token in ["..", ".", "..."]: continue
+        if token in ["am", "pm"] and token_array[idx - 1].isdigit():
             new_token_array.pop()
             new_token_array.append(token_array[idx-1]+token)
             continue
@@ -61,9 +61,9 @@ def cleaner(token_array):
         if token=="'": continue
         if token=="-" and "0" in token_array[idx-1]: 
             new_token_array.pop()
-            new_token_array.append(token_array[idx-1]+"f")
+            new_token_array.append(f"{token_array[idx - 1]}f")
             if "f" not in token_array[idx+1]:
-                token_array[idx+1] = token_array[idx+1]+"f"
+                token_array[idx+1] = f"{token_array[idx + 1]}f"
         new_token_array.append(temp)
     return new_token_array
 

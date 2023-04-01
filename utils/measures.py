@@ -32,9 +32,7 @@ def wer(r, h):
                 insert = d[i][j-1] + 1
                 delete = d[i-1][j] + 1
                 d[i][j] = min(substitute, insert, delete)
-    result = float(d[len(r)][len(h)]) / len(r) * 100
-    # result = str("%.2f" % result) + "%"
-    return result
+    return float(d[len(r)][len(h)]) / len(r) * 100
 
 # -*- coding: utf-8 -*-
 # Copyright 2017 Google Inc.
@@ -68,7 +66,7 @@ def moses_multi_bleu(hypotheses, references, lowercase=False):
     if np.size(hypotheses) == 0:
         return np.float32(0.0)
 
-    
+
     # Get MOSES multi-bleu script
     try:
         multi_bleu_path, _ = urllib.request.urlretrieve(
@@ -93,7 +91,6 @@ def moses_multi_bleu(hypotheses, references, lowercase=False):
     reference_file.flush()
 
 
-     # Calculate BLEU using multi-bleu script
     with open(hypothesis_file.name, "r") as read_pred:
         bleu_cmd = [multi_bleu_path]
         if lowercase:
@@ -102,7 +99,7 @@ def moses_multi_bleu(hypotheses, references, lowercase=False):
         try:
             bleu_out = subprocess.check_output(bleu_cmd, stdin=read_pred, stderr=subprocess.STDOUT)
             bleu_out = bleu_out.decode("utf-8")
-            bleu_score = re.search(r"BLEU = (.+?),", bleu_out).group(1)
+            bleu_score = re.search(r"BLEU = (.+?),", bleu_out)[1]
             bleu_score = float(bleu_score)
         except subprocess.CalledProcessError as error:
             if error.output is not None:

@@ -86,8 +86,7 @@ class Dataset(data.Dataset):
     def preprocess_gate(self, sequence):
         """Converts words to ids."""
         sequence = sequence + [0]
-        sequence = torch.Tensor(sequence)
-        return sequence
+        return torch.Tensor(sequence)
 
 def collate_fn(data):
     def merge(sequences,max_len):
@@ -124,7 +123,7 @@ def collate_fn(data):
 
 
 def read_langs(file_name, max_line = None):
-    logging.info(("Reading lines from {}".format(file_name)))
+    logging.info(f"Reading lines from {file_name}")
     # Read the file and split into lines
     data=[]
     context=""
@@ -136,8 +135,7 @@ def read_langs(file_name, max_line = None):
         max_r_len = 0
         cnt_lin = 1
         for line in fin:
-            line=line.strip()
-            if line:
+            if line := line.strip():
                 if '#' in line:
                     line = line.replace("#","")
                     task_type = line
@@ -146,7 +144,7 @@ def read_langs(file_name, max_line = None):
                 if '\t' in line:
                     u, r, gold  = line.split('\t')
                     gold = ast.literal_eval(gold)
-                    context += str(u)+" " 
+                    context += f"{str(u)} "
                     contex_arr = context.split(' ')[LIMIT:]
                     r_index = []
                     gate = []
@@ -168,32 +166,33 @@ def read_langs(file_name, max_line = None):
                     ent_index_navigation = []
                     ent_index_weather = []
 
-                    if task_type=="weather":
-                        ent_index_weather = gold
-                    elif task_type=="schedule":
-                        ent_index_calendar = gold
-                    elif task_type=="navigate":
+                    if task_type == "navigate":
                         ent_index_navigation = gold
 
+                    elif task_type == "schedule":
+                        ent_index_calendar = gold
+                    elif task_type == "weather":
+                        ent_index_weather = gold
                     ent_index = list(set(ent_index_calendar + ent_index_navigation + ent_index_weather))
 
                     data.append([" ".join(contex_arr)+" $$$$",r,r_index,gate,ent_index,list(set(ent_index_calendar)),list(set(ent_index_navigation)),list(set(ent_index_weather))])
-                    context+=str(r)+" " 
                 else:
                     r=line
-                    context+=str(r)+" "                    
+                context += f"{str(r)} "
             else:
                 cnt_lin+=1
                 if(max_line and cnt_lin>=max_line):
                     break
                 context=""
-    max_len = max([len(d[0].split(' ')) for d in data])
-    avg_len = sum([len(d[0].split(' ')) for d in data]) / float(len([len(d[0].split(' ')) for d in data]))
-    logging.info("Pointer percentace= {} ".format(cnt_ptr/(cnt_ptr+cnt_voc)))
-    logging.info("Max responce Len: {}".format(max_r_len))
-    logging.info("Max Input Len: {}".format(max_len))
-    logging.info("AVG Input Len: {}".format(avg_len))
-     
+    max_len = max(len(d[0].split(' ')) for d in data)
+    avg_len = sum(len(d[0].split(' ')) for d in data) / float(
+        len([len(d[0].split(' ')) for d in data])
+    )
+    logging.info(f"Pointer percentace= {cnt_ptr / (cnt_ptr + cnt_voc)} ")
+    logging.info(f"Max responce Len: {max_r_len}")
+    logging.info(f"Max Input Len: {max_len}")
+    logging.info(f"AVG Input Len: {avg_len}")
+
     # print(data[0][0],data[0][1],data[0][2],data[0][3])
     return data, max_len, max_r_len
 
@@ -219,18 +218,19 @@ def get_seq(pairs,lang,batch_size,type,max_len):
         if(type):
             lang.index_words(pair[0])
             lang.index_words(pair[1])
-    
+
     dataset = Dataset(x_seq, y_seq,ptr_seq,gate_seq,lang.word2index, lang.word2index,max_len,entity,entity_cal,entity_nav,entity_wet)
-    data_loader = torch.utils.data.DataLoader(dataset=dataset,
-                                              batch_size=batch_size,
-                                              shuffle=type,
-                                              collate_fn=collate_fn)
-    return data_loader
+    return torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=type,
+        collate_fn=collate_fn,
+    )
 
 def prepare_data_seq(task,batch_size=100,shuffle=True):
-    file_train = 'data/KVR/{}train.txt'.format(task)
-    file_dev = 'data/KVR/{}dev.txt'.format(task)
-    file_test = 'data/KVR/{}test.txt'.format(task)
+    file_train = f'data/KVR/{task}train.txt'
+    file_dev = f'data/KVR/{task}dev.txt'
+    file_test = f'data/KVR/{task}test.txt'
 
 
     pair_train,max_len_train, max_r_train = read_langs(file_train, max_line=None)
@@ -238,22 +238,22 @@ def prepare_data_seq(task,batch_size=100,shuffle=True):
     pair_test,max_len_test, max_r_test = read_langs(file_test, max_line=None)
     max_r_test_OOV = 0
     max_len_test_OOV = 0
-    
+
     max_len = max(max_len_train,max_len_dev,max_len_test,max_len_test_OOV) +1
     max_r  = max(max_r_train,max_r_dev,max_r_test,max_r_test_OOV) +1
     lang = Lang()
-    
+
     train = get_seq(pair_train,lang,batch_size,True,max_len)
     dev   = get_seq(pair_dev,lang,batch_size,False,max_len)
     test  = get_seq(pair_test,lang,batch_size,False,max_len)
 
-    
-    logging.info("Read %s sentence pairs train" % len(pair_train))
-    logging.info("Read %s sentence pairs dev" % len(pair_dev))
-    logging.info("Read %s sentence pairs test" % len(pair_test))  
-    logging.info("Max len Input %s " % max_len)
-    logging.info("Vocab_size %s " % lang.n_words)
-    logging.info("USE_CUDA={}".format(USE_CUDA))
-    
+
+    logging.info(f"Read {len(pair_train)} sentence pairs train")
+    logging.info(f"Read {len(pair_dev)} sentence pairs dev")
+    logging.info(f"Read {len(pair_test)} sentence pairs test")
+    logging.info(f"Max len Input {max_len} ")
+    logging.info(f"Vocab_size {lang.n_words} ")
+    logging.info(f"USE_CUDA={USE_CUDA}")
+
     return train, dev, test, [], lang, max_len, max_r
 

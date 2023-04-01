@@ -35,16 +35,16 @@ class Mem2Seq(nn.Module):
         self.n_layers = n_layers
         self.dropout = dropout
         self.unk_mask = unk_mask
-        
+
         if path:
             if USE_CUDA:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th')
-                self.decoder = torch.load(str(path)+'/dec.th')
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th')
+                self.decoder = torch.load(f'{str(path)}/dec.th')
             else:
-                logging.info("MODEL {} LOADED".format(str(path)))
-                self.encoder = torch.load(str(path)+'/enc.th',lambda storage, loc: storage)
-                self.decoder = torch.load(str(path)+'/dec.th',lambda storage, loc: storage)
+                logging.info(f"MODEL {str(path)} LOADED")
+                self.encoder = torch.load(f'{str(path)}/enc.th', lambda storage, loc: storage)
+                self.decoder = torch.load(f'{str(path)}/dec.th', lambda storage, loc: storage)
         else:
             self.encoder = EncoderMemNN(lang.n_words, hidden_size, n_layers, self.dropout, self.unk_mask)
             self.decoder = DecoderMemNN(lang.n_words, hidden_size, n_layers, self.dropout, self.unk_mask)
@@ -72,11 +72,21 @@ class Mem2Seq(nn.Module):
     
     def save_model(self, dec_type):
         name_data = "KVR/" if self.task=='' else "BABI/"
-        directory = 'save/mem2seq-'+name_data+str(self.task)+'HDD'+str(self.hidden_size)+'BSZ'+str(args['batch'])+'DR'+str(self.dropout)+'L'+str(self.n_layers)+'lr'+str(self.lr)+str(dec_type)                 
+        directory = (
+            f'save/mem2seq-{name_data}{str(self.task)}HDD{str(self.hidden_size)}BSZ'
+            + str(args['batch'])
+            + 'DR'
+            + str(self.dropout)
+            + 'L'
+            + str(self.n_layers)
+            + 'lr'
+            + str(self.lr)
+            + str(dec_type)
+        )
         if not os.path.exists(directory):
             os.makedirs(directory)
-        torch.save(self.encoder, directory+'/enc.th')
-        torch.save(self.decoder, directory+'/dec.th')
+        torch.save(self.encoder, f'{directory}/enc.th')
+        torch.save(self.decoder, f'{directory}/dec.th')
         
     def train_batch(self, input_batches, input_lengths, target_batches, 
                     target_lengths, target_index, target_gate, batch_size, clip,
@@ -100,7 +110,7 @@ class Mem2Seq(nn.Module):
 
         # Prepare input and output variables
         decoder_input = Variable(torch.LongTensor([SOS_token] * batch_size))
-        
+
         max_target_length = max(target_lengths)
         all_decoder_outputs_vocab = Variable(torch.zeros(max_target_length, batch_size, self.output_size))
         all_decoder_outputs_ptr = Variable(torch.zeros(max_target_length, batch_size, input_batches.size(0)))
@@ -113,18 +123,14 @@ class Mem2Seq(nn.Module):
 
         # Choose whether to use teacher forcing
         use_teacher_forcing = random.random() < teacher_forcing_ratio
-        
-        if use_teacher_forcing:    
-            # Run through decoder one time step at a time
-            for t in range(max_target_length):
-                decoder_ptr, decoder_vacab, decoder_hidden  = self.decoder.ptrMemDecoder(decoder_input, decoder_hidden)
+
+        for t in range(max_target_length):
+            decoder_ptr, decoder_vacab, decoder_hidden  = self.decoder.ptrMemDecoder(decoder_input, decoder_hidden)
+            if use_teacher_forcing:    
                 all_decoder_outputs_vocab[t] = decoder_vacab
                 all_decoder_outputs_ptr[t] = decoder_ptr
                 decoder_input = target_batches[t]# Chosen word is next input
-                if USE_CUDA: decoder_input = decoder_input.cuda()            
-        else:
-            for t in range(max_target_length):
-                decoder_ptr, decoder_vacab, decoder_hidden = self.decoder.ptrMemDecoder(decoder_input, decoder_hidden)
+            else:
                 _, toppi = decoder_ptr.data.topk(1)
                 _, topvi = decoder_vacab.data.topk(1)
                 all_decoder_outputs_vocab[t] = decoder_vacab
@@ -134,8 +140,7 @@ class Mem2Seq(nn.Module):
                 next_in = [top_ptr_i[i].item() if (toppi[i].item() < input_lengths[i]-1) else topvi[i].item() for i in range(batch_size)]
 
                 decoder_input = Variable(torch.LongTensor(next_in)) # Chosen word is next input
-                if USE_CUDA: decoder_input = decoder_input.cuda()
-                  
+            if USE_CUDA: decoder_input = decoder_input.cuda()
         #Loss calculation and backpropagation
         loss_Vocab = masked_cross_entropy(
             all_decoder_outputs_vocab.transpose(0, 1).contiguous(), # -> batch x seq
@@ -150,7 +155,7 @@ class Mem2Seq(nn.Module):
 
         loss = loss_Vocab + loss_Ptr
         loss.backward()
-        
+
         # Clip gradient norms
         ec = torch.nn.utils.clip_grad_norm(self.encoder.parameters(), clip)
         dc = torch.nn.utils.clip_grad_norm(self.decoder.parameters(), clip)
